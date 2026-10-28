@@ -982,6 +982,7 @@ body{
 
 .card-type{
   align-items:center;
+  color:var(--text-muted);
   display:flex;
   font-size:12px;
   gap:var(--spacing-sm);
@@ -989,14 +990,38 @@ body{
   text-transform:uppercase;
 }
 
-.card-menu,.card-type{
-  color:var(--text-muted);
+.card-select,.column-select{
+  cursor:pointer;
+  flex-shrink:0;
+  margin:0;
+}
+
+.card-select{
+  margin-right:var(--spacing-sm);
+}
+
+.card-select+.card-type{
+  margin-right:auto;
+}
+
+.kanban-drag-badge{
+  background-color:var(--typo3-orange);
+  border-radius:var(--border-radius-sm);
+  color:#fff;
+  font-size:13px;
+  font-weight:600;
+  left:-1000px;
+  padding:6px 12px;
+  position:absolute;
+  top:-1000px;
+  white-space:nowrap;
 }
 
 .card-menu{
   background:none;
   border:none;
   border-radius:var(--border-radius-sm);
+  color:var(--text-muted);
   cursor:pointer;
   opacity:0;
   padding:4px;
