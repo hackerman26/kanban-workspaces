@@ -24,6 +24,7 @@ import { WorkspaceApi } from '@web-vision/kanban-workspaces/data/WorkspaceApi.js
 import { showToast, showLoading, hideLoading, debounce } from '@web-vision/kanban-workspaces/core/utils.js';
 import { initHorizontalScroll } from '@web-vision/kanban-workspaces/core/HorizontalScroll.js';
 import '@web-vision/kanban-workspaces/components/column.js';
+import '@web-vision/kanban-workspaces/components/published-column.js';
 import '@web-vision/kanban-workspaces/components/filter-sidebar.js';
 import '@web-vision/kanban-workspaces/components/preview-modal.js';
 import '@web-vision/kanban-workspaces/components/send-to-stage-modal.js';
@@ -44,6 +45,9 @@ let KanbanBoardElement = class KanbanBoardElement extends LitElement {
         this.searchQuery = '';
         this.selectedCards = new Set();
         this.filtersOpen = false;
+        // Live column: records published from the workspace
+        this.publishedRecords = [];
+        this.publishedDays = 0;
         // Preview modal state
         this.previewOpen = false;
         this.previewCard = null;
@@ -182,6 +186,29 @@ let KanbanBoardElement = class KanbanBoardElement extends LitElement {
             .then((data) => { this.cards = data.cards || []; })
             .catch((error) => { console.error('Failed to load data:', error); showToast('Error loading data', 'error'); this.cards = []; })
             .finally(() => hideLoading());
+        this.loadPublishedHistory();
+    }
+    loadPublishedHistory() {
+        const url = TYPO3?.settings?.ajaxUrls?.kanban_workspace_published_history;
+        if (!url) {
+            return;
+        }
+        this.api.fetchPublishedHistory(url)
+            .then(({ days, records }) => { this.publishedDays = days; this.publishedRecords = records; })
+            .catch((error) => {
+            console.error('Failed to load published records:', error);
+            showToast(TYPO3?.lang?.['publishedHistory.loadError'] || 'Error loading the published records', 'error');
+            this.publishedRecords = [];
+        });
+    }
+    // The header search applies to the Live column as well (the stage columns are filtered server side).
+    filteredPublishedRecords() {
+        const query = this.searchQuery.trim().toLowerCase();
+        if (!query) {
+            return this.publishedRecords;
+        }
+        return this.publishedRecords.filter((record) => [record.title, record.pageTitle, record.type, String(record.uid)]
+            .some((value) => value.toLowerCase().includes(query)));
     }
     cardsForStage(stage) {
         let list = this.cards.filter((card) => card.stage === stage.id);
@@ -661,6 +688,10 @@ let KanbanBoardElement = class KanbanBoardElement extends LitElement {
               .stage=${stage}
               .cards=${this.cardsForStage(stage)}
               .selectedCards=${this.selectedCards}></typo3-kanban-column>`)}
+          ${TYPO3?.settings?.ajaxUrls?.kanban_workspace_published_history ? html `
+            <typo3-kanban-published-column
+              .records=${this.filteredPublishedRecords()}
+              .days=${this.publishedDays}></typo3-kanban-published-column>` : nothing}
         </div>
       </section>
 
@@ -721,6 +752,12 @@ __decorate([
 __decorate([
     state()
 ], KanbanBoardElement.prototype, "filtersOpen", void 0);
+__decorate([
+    state()
+], KanbanBoardElement.prototype, "publishedRecords", void 0);
+__decorate([
+    state()
+], KanbanBoardElement.prototype, "publishedDays", void 0);
 __decorate([
     state()
 ], KanbanBoardElement.prototype, "previewOpen", void 0);

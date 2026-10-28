@@ -1,5 +1,5 @@
 import { DataTransformer } from '@web-vision/kanban-workspaces/data/DataTransformer.js';
-import type { Card } from '@web-vision/kanban-workspaces/types.js';
+import type { Card, PublishedRecord } from '@web-vision/kanban-workspaces/types.js';
 
 export interface CardDetails {
   comments: any[];
@@ -53,6 +53,16 @@ export class WorkspaceApi {
     };
     const apiResponse = await this.postJson(this.dataUrl, apiPayload);
     return this.transformer.convertCardDetailsToFormat(apiResponse, card.id);
+  }
+
+  // Fetch the records published from the current workspace (Live column).
+  async fetchPublishedHistory(url: string): Promise<{ days: number; records: PublishedRecord[] }> {
+    const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    if (!response.ok) {
+      throw new Error(`Request failed with status ${response.status}`);
+    }
+    const result = await response.json();
+    return { days: result.days || 0, records: result.records || [] };
   }
 
   // Generic "Actions" dispatch call (view/delete/send-to-stage/add-comment).
