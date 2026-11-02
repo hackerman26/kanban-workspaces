@@ -1064,6 +1064,34 @@ body {
   letter-spacing: 0.5px;
 }
 
+.card-select,
+.column-select {
+  flex-shrink: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.card-select {
+  margin-right: var(--spacing-sm);
+}
+
+.card-select + .card-type {
+  margin-right: auto;
+}
+
+.kanban-drag-badge {
+  position: absolute;
+  top: -1000px;
+  left: -1000px;
+  padding: 6px 12px;
+  border-radius: var(--border-radius-sm);
+  background-color: var(--typo3-orange);
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .card-menu {
   background: none;
   border: none;
