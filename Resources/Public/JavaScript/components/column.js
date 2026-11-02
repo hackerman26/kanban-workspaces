@@ -22,8 +22,9 @@ import '@web-vision/kanban-workspaces/components/card.js';
  * cards as `<typo3-kanban-card>` children and manages the drop target: dropping
  * a card dispatches a `column-drop` event the board turns into a stage
  * transition. The header checkbox (de)selects all cards of the column via a
- * `column-select` event. The host uses `display: contents` so the inner
- * `.kanban-column` remains the grid item.
+ * `column-select` event; the "Publish" column has none, as cards dropped there
+ * are published and cannot be moved on. The host uses `display: contents` so
+ * the inner `.kanban-column` remains the grid item.
  */
 let KanbanColumnElement = class KanbanColumnElement extends LitElement {
     constructor() {
@@ -74,14 +75,15 @@ let KanbanColumnElement = class KanbanColumnElement extends LitElement {
         <div class="column-header">
           <div class="column-title-row">
             <div class="column-title-main">
-              <span class="form-check column-select-wrapper">
-                <input type="checkbox" class="form-check-input column-select"
-                  title="Select all cards in this column" aria-label="Select all cards in ${stage.label}"
-                  ?disabled=${this.cards.length === 0}
-                  .checked=${this.cards.length > 0 && selectedCount === this.cards.length}
-                  .indeterminate=${selectedCount > 0 && selectedCount < this.cards.length}
-                  @change=${(e) => this.onSelectAll(e)}>
-              </span>
+              ${stage.isExecuteStage ? nothing : html `
+                <span class="form-check column-select-wrapper">
+                  <input type="checkbox" class="form-check-input column-select"
+                    title="Select all cards in this column" aria-label="Select all cards in ${stage.label}"
+                    ?disabled=${this.cards.length === 0}
+                    .checked=${this.cards.length > 0 && selectedCount === this.cards.length}
+                    .indeterminate=${selectedCount > 0 && selectedCount < this.cards.length}
+                    @change=${(e) => this.onSelectAll(e)}>
+                </span>`}
               <div class="stage-indicator" style=${`background-color: ${stage.color || 'var(--typo3-orange)'}`}></div>
               <span class="column-name">${stage.label}</span>
               <span class="column-count">${this.cards.length}</span>
