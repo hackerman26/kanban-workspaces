@@ -66,7 +66,6 @@ let KanbanBoardElement = class KanbanBoardElement extends LitElement {
         // Card context menu state
         this.contextMenu = null;
         this.columnUserFilters = {};
-        this.columnSorts = {};
         this.comments = {};
         this.history = {};
         this.diffs = {};
@@ -146,7 +145,6 @@ let KanbanBoardElement = class KanbanBoardElement extends LitElement {
         this.skipSendToStageDialog = !!config.skipSendToStageDialog;
         this.stages.forEach((stage) => {
             this.columnUserFilters[stage.id] = null;
-            this.columnSorts[stage.id] = null;
         });
         this.activeFilters = {
             depth: config.selectedDepth ? [String(config.selectedDepth)] : [],
@@ -245,10 +243,8 @@ let KanbanBoardElement = class KanbanBoardElement extends LitElement {
         if (userFilter) {
             list = list.filter((card) => (card.assignedUsers || []).some((u) => u.uid === userFilter));
         }
-        if (this.columnSorts[stage.id] === 'modifiedDate') {
-            list = [...list].sort((a, b) => new Date(b.modifiedDate).getTime() - new Date(a.modifiedDate).getTime());
-        }
-        return list;
+        // newest change first
+        return list.sort((a, b) => (b.lastChanged || 0) - (a.lastChanged || 0));
     }
     getCardById(id) {
         return this.cards.find((card) => card.id == id);
