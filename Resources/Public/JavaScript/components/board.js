@@ -179,7 +179,10 @@ let KanbanBoardElement = class KanbanBoardElement extends LitElement {
         payload.filterTxt = this.searchQuery;
         showLoading();
         this.api.fetchData(this.apiPayload)
-            .then((data) => { this.cards = data.cards || []; this.pruneSelection(); })
+            .then((data) => {
+            this.cards = data.cards || [];
+            this.pruneSelection();
+        })
             .catch((error) => { console.error('Failed to load data:', error); showToast('Error loading data', 'error'); this.cards = []; })
             .finally(() => hideLoading());
     }
@@ -200,12 +203,14 @@ let KanbanBoardElement = class KanbanBoardElement extends LitElement {
     // --- Selection / keyboard --------------------------------------------------
     setSelected(cardIds, selected) {
         const next = new Set(this.selectedCards);
-        cardIds.forEach((id) => { if (selected) {
-            next.add(id);
-        }
-        else {
-            next.delete(id);
-        } });
+        cardIds.forEach((id) => {
+            if (selected) {
+                next.add(id);
+            }
+            else {
+                next.delete(id);
+            }
+        });
         this.selectedCards = next;
     }
     // Drop selected cards that are gone after a reload (published, discarded, filtered out).
