@@ -85,10 +85,12 @@ export class KanbanCardElement extends LitElement {
         @dragstart=${(e: DragEvent) => this.onDragStart(e)}
         @dragend=${(e: DragEvent) => this.emit('card-dragend', { element: e.currentTarget })}>
         <div class="card-header">
-          <input type="checkbox" class="form-check-input card-select" .checked=${this.selected}
-            title="Select card" aria-label="Select card: ${card.title}"
-            @click=${(e: Event) => e.stopPropagation()}
-            @change=${(e: Event) => this.emit('card-select', { selected: (e.target as HTMLInputElement).checked })}>
+          <span class="form-check card-select-wrapper">
+            <input type="checkbox" class="form-check-input card-select" .checked=${this.selected}
+              title="Select card" aria-label="Select card: ${card.title}"
+              @click=${(e: Event) => e.stopPropagation()}
+              @change=${(e: Event) => this.emit('card-select', { selected: (e.target as HTMLInputElement).checked })}>
+          </span>
           <div class="card-type">
             <i class=${getTypeIcon(card.type)}></i>
             <span>${card.type}</span>

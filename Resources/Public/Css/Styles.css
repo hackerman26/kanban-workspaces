@@ -990,17 +990,21 @@ body{
   text-transform:uppercase;
 }
 
+.card-select-wrapper,.column-select-wrapper{
+  --typo3-form-check-margin-bottom:0;
+  flex-shrink:0;
+}
+
 .card-select,.column-select{
   cursor:pointer;
-  flex-shrink:0;
   margin:0;
 }
 
-.card-select{
+.card-select-wrapper{
   margin-right:var(--spacing-sm);
 }
 
-.card-select+.card-type{
+.card-select-wrapper+.card-type{
   margin-right:auto;
 }
 
