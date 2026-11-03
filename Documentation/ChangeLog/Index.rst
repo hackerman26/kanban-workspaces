@@ -21,6 +21,8 @@ New Features
 * **One card per workspace collection** – Records that depend on another record in the same stage (inline children
   such as the content elements of a news record) get no card of their own. Moving the parent card to another stage,
   by drag & drop or with Approve / Revert, moves its dependent records along.
+* **No language on single-language sites** – If the backend user can choose from only one language, the board shows
+  neither the language filter nor the language of the cards.
 
 Version 0.0.2
 =============

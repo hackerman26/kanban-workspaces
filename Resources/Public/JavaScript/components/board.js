@@ -42,6 +42,8 @@ let KanbanBoardElement = class KanbanBoardElement extends LitElement {
         this.cards = [];
         this.stages = [];
         this.filters = {};
+        /** False if there is only one language: the cards then show no language. */
+        this.showLanguages = true;
         this.activeFilters = {};
         this.searchQuery = '';
         this.selectedCards = new Set();
@@ -141,6 +143,7 @@ let KanbanBoardElement = class KanbanBoardElement extends LitElement {
         }
         this.stages = [...(config.stages || [])];
         this.filters = { ...(config.filters || {}) };
+        this.showLanguages = config.showLanguages !== false;
         this.beUsers = config.beUsers || [];
         this.skipSendToStageDialog = !!config.skipSendToStageDialog;
         this.stages.forEach((stage) => {
@@ -799,7 +802,8 @@ let KanbanBoardElement = class KanbanBoardElement extends LitElement {
             <typo3-kanban-column
               .stage=${stage}
               .cards=${this.cardsForStage(stage)}
-              .selectedCards=${this.selectedCards}></typo3-kanban-column>`)}
+              .selectedCards=${this.selectedCards}
+              .showLanguages=${this.showLanguages}></typo3-kanban-column>`)}
           ${TYPO3?.settings?.ajaxUrls?.kanban_workspace_published_history ? html `
             <typo3-kanban-published-column
               .records=${this.filteredPublishedRecords()}
@@ -853,6 +857,9 @@ __decorate([
 __decorate([
     state()
 ], KanbanBoardElement.prototype, "filters", void 0);
+__decorate([
+    state()
+], KanbanBoardElement.prototype, "showLanguages", void 0);
 __decorate([
     state()
 ], KanbanBoardElement.prototype, "activeFilters", void 0);
