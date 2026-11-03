@@ -23,6 +23,8 @@ New Features
   by drag & drop or with Approve / Revert, moves its dependent records along.
 * **No language on single-language sites** – If the backend user can choose from only one language, the board shows
   neither the language filter nor the language of the cards.
+* **Avatar of the last editor** – The cards show the avatar (or the initial) of the backend user who made the latest
+  change of the workspace version, taken from the record history. Stage changes are not counted as a change.
 
 Version 0.0.2
 =============
