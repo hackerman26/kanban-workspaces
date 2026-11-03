@@ -976,7 +976,7 @@ body{
 .card-header{
   align-items:center;
   display:flex;
-  justify-content:space-between;
+  gap:var(--spacing-sm);
   margin-bottom:var(--spacing-md);
 }
 
@@ -1012,7 +1012,7 @@ body{
   margin-right:var(--spacing-sm);
 }
 
-.card-select-wrapper+.card-type{
+.card-header>.card-type{
   margin-right:auto;
 }
 
@@ -1029,22 +1029,25 @@ body{
   white-space:nowrap;
 }
 
-.card-menu{
+.card-actions{
+  align-items:center;
+  display:flex;
+  flex-shrink:0;
+  gap:2px;
+}
+
+.card-action,.card-menu{
   background:none;
   border:none;
   border-radius:var(--border-radius-sm);
   color:var(--text-muted);
   cursor:pointer;
-  opacity:0;
+  line-height:1;
   padding:4px;
   transition:var(--transition);
 }
 
-.kanban-card:hover .card-menu{
-  opacity:1;
-}
-
-.card-menu:hover{
+.card-action:focus-visible,.card-action:hover,.card-menu:focus-visible,.card-menu:hover{
   background-color:var(--bg-secondary);
   color:var(--text-secondary);
 }

@@ -750,10 +750,8 @@ export class KanbanBoardElement extends LitElement {
   private renderContextMenu(): TemplateResult | typeof nothing {
     if (!this.contextMenu) { return nothing; }
     const { card, x, y } = this.contextMenu;
+    // Preview, Edit and Open version of page are icon buttons on the card itself
     const items = [
-      { action: 'preview-element', label: 'Preview Element', cls: '' },
-      { action: 'edit-element', label: 'Edit Element', cls: '' },
-      { action: 'page-version', label: 'Open version of page', cls: '' },
       { action: 'assign-record', label: 'Assign', cls: '' },
       { action: 'delete-card', label: 'Discard version of record', cls: 'danger' },
     ];
@@ -782,6 +780,7 @@ export class KanbanBoardElement extends LitElement {
           @card-click=${(e: CustomEvent) => this.handleCardClick(e.detail.card)}
           @card-select=${(e: CustomEvent) => this.setSelected([e.detail.card.id], e.detail.selected)}
           @column-select=${(e: CustomEvent) => this.setSelected(e.detail.cardIds, e.detail.selected)}
+          @card-action=${(e: CustomEvent) => this.runCardAction(e.detail.action, e.detail.card)}
           @card-menu=${(e: CustomEvent) => this.openContextMenu(e.detail.card, e.detail.anchor)}
           @card-dragstart=${(e: CustomEvent) => this.handleCardDragStart(e.detail.card, e.detail.event)}
           @card-dragend=${() => { this.draggedCard = null; document.body.classList.remove('dragging'); }}

@@ -25,6 +25,8 @@ New Features
   neither the language filter nor the language of the cards.
 * **Avatar of the last editor** – The cards show the avatar (or the initial) of the backend user who made the latest
   change of the workspace version, taken from the record history. Stage changes are not counted as a change.
+* **Card action buttons** – Preview Element, Edit Element and Open version of page are always-visible icon buttons in
+  the card header instead of entries of the hover-only "⋯" menu, which keeps Assign and Discard version of record.
 
 Version 0.0.2
 =============
