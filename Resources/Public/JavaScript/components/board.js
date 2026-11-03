@@ -244,10 +244,38 @@ let KanbanBoardElement = class KanbanBoardElement extends LitElement {
             list = list.filter((card) => (card.assignedUsers || []).some((u) => u.uid === userFilter));
         }
         // newest change first
-        return list.sort((a, b) => (b.lastChanged || 0) - (a.lastChanged || 0));
+        list.sort((a, b) => (b.lastChanged || 0) - (a.lastChanged || 0));
+        // A dependent record (e.g. a content element of a news record) gets no card of its
+        // own while its parent is in the same column, it is moved along with the parent.
+        const collections = new Set(list.map((card) => card.collectionCurrent).filter(Boolean));
+        return list.filter((card) => !card.collectionParent || !collections.has(card.collectionParent));
     }
     getCardById(id) {
         return this.cards.find((card) => card.id == id);
+    }
+    /**
+     * All cards in the stage of the given card that (transitively) belong to its collection.
+     */
+    collectionDescendants(parent) {
+        if (!parent.collectionCurrent) {
+            return [];
+        }
+        return this.cards
+            .filter((card) => card.stage == parent.stage && card.collectionParent === parent.collectionCurrent)
+            .flatMap((child) => [child, ...this.collectionDescendants(child)]);
+    }
+    /**
+     * The given card ids plus the ids of their collection members in the same stage.
+     */
+    withCollectionMembers(cardIds) {
+        const ids = new Map(cardIds.map((id) => [String(id), id]));
+        for (const id of cardIds) {
+            const card = this.getCardById(id);
+            if (card) {
+                this.collectionDescendants(card).forEach((child) => ids.set(String(child.id), child.id));
+            }
+        }
+        return Array.from(ids.values());
     }
     // --- Selection / keyboard --------------------------------------------------
     setSelected(cardIds, selected) {
@@ -415,6 +443,12 @@ let KanbanBoardElement = class KanbanBoardElement extends LitElement {
         return this.stages.findIndex((s) => s.id == stageId);
     }
     async openStageWindow(card, direction, cardIds, targetStage) {
+        // sendToNext/PrevStageWindow only affect the single record, so a collection is
+        // sent to the target stage like a drop on the target column.
+        const collectionIds = this.withCollectionMembers(cardIds);
+        if (targetStage && collectionIds.length > cardIds.length) {
+            return this.openSpecificStageWindow(targetStage, collectionIds, this.stages.find((s) => s.id == card.stage) || null);
+        }
         const method = direction === 'next' ? 'sendToNextStageWindow' : 'sendToPrevStageWindow';
         const executeMethod = direction === 'next' ? 'sendToNextStageExecute' : 'sendToPrevStageExecute';
         const data = direction === 'next' ? [card.uid, card.table, card.t3ver_oid] : [card.uid, card.table];
@@ -516,8 +550,9 @@ let KanbanBoardElement = class KanbanBoardElement extends LitElement {
         // Dragging a selected card moves the whole selection, dragging any other
         // card only moves that card. Only forward cards not already in the drop
         // target: a multi-selection may span stages or include cards already
-        // sitting in the target column.
-        const cardIds = this.cardIdsToDrag(dragged)
+        // sitting in the target column. The collection members of the dropped
+        // cards are moved along.
+        const cardIds = this.withCollectionMembers(this.cardIdsToDrag(dragged))
             .filter((id) => {
             const card = this.getCardById(id);
             return card != null && card.stage != targetStage.id;

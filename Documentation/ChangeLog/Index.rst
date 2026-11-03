@@ -18,6 +18,9 @@ New Features
 * **Skip "Send to stage" dialog** – New extension configuration option ``skipSendToStageDialog``; when enabled stage
   changes on the kanban board are executed right away without the "Send to stage" dialog. The dialog still opens when
   mail recipients or a stage checklist need a decision.
+* **One card per workspace collection** – Records that depend on another record in the same stage (inline children
+  such as the content elements of a news record) get no card of their own. Moving the parent card to another stage,
+  by drag & drop or with Approve / Revert, moves its dependent records along.
 
 Version 0.0.2
 =============
