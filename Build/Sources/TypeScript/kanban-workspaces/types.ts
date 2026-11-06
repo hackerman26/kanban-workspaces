@@ -46,6 +46,20 @@ export interface Card {
   [key: string]: unknown;
 }
 
+/** An inline child (e.g. a content element of a news record) published together with its parent. */
+export interface PublishedChildRecord {
+  /** uid of the sys_history entry */
+  id: number;
+  table: string;
+  uid: number;
+  title: string;
+  /** translated table title */
+  type: string;
+  action: 'new' | 'modified' | 'deleted';
+  /** backend URL of the record history (diff view) */
+  historyUrl: string;
+}
+
 /** A record published from the current workspace (sys_history), shown in the "Live" column. */
 export interface PublishedRecord {
   /** uid of the sys_history entry */
@@ -64,6 +78,8 @@ export interface PublishedRecord {
   comment: string;
   /** backend URL of the record history (diff view) */
   historyUrl: string;
+  /** inline children published with the record, "modified" is the action of a record only changed through them */
+  children: PublishedChildRecord[];
 }
 
 export interface Stage {

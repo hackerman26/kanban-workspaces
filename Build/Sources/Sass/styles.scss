@@ -2493,7 +2493,8 @@ typo3-kanban-assign-modal {
 }
 
 // "Live" column: read-only list of the records published from the workspace.
-// The cards are links to the record history instead of draggable cards.
+// The cards link to the record history instead of being draggable: the link in
+// the title covers the whole card, the links of the children lie above it.
 .kanban-column-published {
   .stage-indicator {
     background-color: var(--success);
@@ -2525,15 +2526,77 @@ typo3-kanban-assign-modal {
 
 .kanban-card-published {
   display: block;
-  color: inherit;
-  text-decoration: none;
   border-left: 3px solid var(--success);
 
-  &:hover,
-  &:focus {
+  &:focus-within {
+    box-shadow: var(--shadow-lg);
+    border-color: var(--border-color);
+  }
+
+  a {
     color: inherit;
     text-decoration: none;
+
+    &:hover,
+    &:focus {
+      color: inherit;
+      text-decoration: none;
+    }
   }
+
+  .published-link {
+    outline: none;
+
+    &::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+    }
+  }
+}
+
+.published-children {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 var(--spacing-sm);
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+
+  a {
+    display: flex;
+    align-items: baseline;
+    gap: var(--spacing-xs);
+    padding: 2px var(--spacing-xs);
+    border-radius: var(--border-radius);
+
+    &:hover,
+    &:focus {
+      background-color: var(--bg-secondary);
+    }
+  }
+
+  .published-action {
+    flex: none;
+    font-size: 10px;
+    padding: 1px 6px;
+  }
+}
+
+.published-child-type {
+  flex: none;
+  color: var(--text-muted);
+}
+
+.published-child-title {
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .published-action {
