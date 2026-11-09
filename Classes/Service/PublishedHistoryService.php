@@ -22,12 +22,27 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
  * The workspaces DataHandler hook writes a "publish" entry (actiontype 7) for every
  * published record. The entry itself is stored for the live workspace (workspace = 0),
  * the source workspace is only part of the JSON payload (history_data.workspaceId).
+ *
+ * Like the collections of the workspace module, the inline children of a record (e.g. the content
+ * elements and files of a news record) are no records of their own: they are listed as children
+ * of their top-level parent, which is listed even if it was not changed itself.
+ *
+ * @phpstan-type PublishEntry array{id: int, table: string, uid: int, record: array<string, mixed>, action: string, tstamp: int, userId: int, comment: string}
+ * @phpstan-type CollectionRoot array{table: string, uid: int, record: array<string, mixed>}
  */
 class PublishedHistoryService
 {
     public const DEFAULT_MAX_AGE_DAYS = 30;
     public const MAX_AGE_DAYS = 365;
     public const DEFAULT_LIMIT = 200;
+
+    /**
+     * Entries of one collection published at most this many seconds apart belong to the same
+     * publish and are merged into one record.
+     */
+    public const GROUP_SECONDS = 10;
+
+    protected const MAX_PARENT_LEVELS = 10;
 
     /**
      * @var array<int, string>
@@ -39,6 +54,18 @@ class PublishedHistoryService
      */
     protected array $readablePages = [];
 
+    /**
+     * Inline relations with a foreign field (type inline and file), by child table
+     *
+     * @var array<string, list<array{table: string, field: string, tableField: string, matchFields: array<string, mixed>}>>|null
+     */
+    protected ?array $inlineParentRelations = null;
+
+    /**
+     * @var array<string, CollectionRoot>
+     */
+    protected array $collectionRoots = [];
+
     public function __construct(
         protected readonly ConnectionPool $connectionPool,
         protected readonly UriBuilder $backendUriBuilder,
@@ -48,10 +75,11 @@ class PublishedHistoryService
     /**
      * Get the records published from the given workspace since the given timestamp, newest first.
      *
-     * Only records the backend user may read are returned. Records of tables that are hidden
-     * in the backend (ctrl.hideTable, e.g. sys_file_reference) are left out, they are inline
-     * children of a record that is listed itself. With $pageIds (see getPageTreeIds()) only
-     * records on these pages and the pages themselves are returned, otherwise all.
+     * The inline children published together with their parent (see GROUP_SECONDS) are returned
+     * as "children" of the parent's record. Only records the backend user may read are returned.
+     * Records of tables that are hidden in the backend (ctrl.hideTable, e.g. sys_file_reference)
+     * are only listed as children. With $pageIds (see getPageTreeIds()) only records on these
+     * pages and the pages themselves are returned, otherwise all.
      *
      * @param list<int>|null $pageIds
      *
@@ -67,7 +95,8 @@ class PublishedHistoryService
      *     publishedAt: string,
      *     publishedBy: string,
      *     comment: string,
-     *     historyUrl: string
+     *     historyUrl: string,
+     *     children: list<array{id: int, table: string, uid: int, title: string, type: string, action: string, historyUrl: string}>
      * }>
      */
     public function findPublishedRecords(int $workspaceId, int $since, int $limit = self::DEFAULT_LIMIT, ?array $pageIds = null): array
@@ -94,19 +123,44 @@ class PublishedHistoryService
             ->executeQuery();
 
         // no SQL limit: the page and permission checks below need the record, so the limit is applied to the result
-        $records = [];
-        while (count($records) < $limit && ($row = $result->fetchAssociative())) {
+        // the groups of entries that are listed as one record, by group index
+        $groupRoots = [];
+        $groupEntries = [];
+        // the entries are newest first, this is the time of the group's last entry
+        $groupOldest = [];
+        // the group index of the latest group of each collection
+        $groupIndexes = [];
+        while ($row = $result->fetchAssociative()) {
             $payload = json_decode((string)$row['history_data'], true);
             if (!is_array($payload) || (int)($payload['workspaceId'] ?? 0) !== $workspaceId) {
                 continue;
             }
-            $record = $this->buildRecord($row, $payload, $pageIdLookup);
-            if ($record !== null) {
-                $records[] = $record;
+            $entry = $this->buildEntry($row, $payload);
+            if ($entry === null) {
+                continue;
             }
+            $root = $this->getCollectionRoot($entry['table'], $entry['record']);
+            if (!$this->isListed($root['table'], $root['uid'], $root['record'], $pageIdLookup)) {
+                continue;
+            }
+            $groupKey = $root['table'] . ':' . $root['uid'];
+            $index = $groupIndexes[$groupKey] ?? null;
+            if ($index !== null && $groupOldest[$index] - $entry['tstamp'] <= self::GROUP_SECONDS) {
+                $groupEntries[$index][] = $entry;
+                $groupOldest[$index] = $entry['tstamp'];
+                continue;
+            }
+            if (count($groupRoots) >= $limit) {
+                break;
+            }
+            $index = count($groupRoots);
+            $groupIndexes[$groupKey] = $index;
+            $groupRoots[$index] = $root;
+            $groupEntries[$index] = [$entry];
+            $groupOldest[$index] = $entry['tstamp'];
         }
         $result->free();
-        return $records;
+        return array_map($this->buildRecord(...), $groupRoots, $groupEntries);
     }
 
     /**
@@ -154,9 +208,63 @@ class PublishedHistoryService
     }
 
     /**
+     * The publish entry of a record the backend user may read, null otherwise.
+     *
      * @param array<string, mixed> $historyRow
      * @param array<string, mixed> $payload
+     * @return PublishEntry|null
+     */
+    protected function buildEntry(array $historyRow, array $payload): ?array
+    {
+        $table = (string)$historyRow['tablename'];
+        $uid = (int)$historyRow['recuid'];
+        if (!is_array($GLOBALS['TCA'][$table]['ctrl'] ?? null) || !$this->getBackendUser()->check('tables_select', $table)) {
+            return null;
+        }
+        // deleted records are included: publishing a delete placeholder deletes the live record
+        $record = BackendUtility::getRecord($table, $uid, '*', '', false);
+        if ($record === null) {
+            return null;
+        }
+        return [
+            'id' => (int)$historyRow['uid'],
+            'table' => $table,
+            'uid' => $uid,
+            'record' => $record,
+            'action' => $this->getAction($historyRow, $payload, $record),
+            'tstamp' => (int)$historyRow['tstamp'],
+            'userId' => (int)$historyRow['userid'],
+            'comment' => (string)($payload['comment'] ?? ''),
+        ];
+    }
+
+    /**
+     * Whether a record is listed with its children: hidden tables are only listed as children,
+     * the record has to be on one of the pages (if given) and the user has to be able to read the page.
+     *
+     * @param array<string, mixed> $record
      * @param array<int, true>|null $pageIdLookup
+     */
+    protected function isListed(string $table, int $uid, array $record, ?array $pageIdLookup): bool
+    {
+        if ($GLOBALS['TCA'][$table]['ctrl']['hideTable'] ?? false) {
+            return false;
+        }
+        if (!$this->getBackendUser()->check('tables_select', $table)) {
+            return false;
+        }
+        $pageId = $table === 'pages' ? $uid : (int)$record['pid'];
+        if ($pageIdLookup !== null && !isset($pageIdLookup[$this->getDefaultLanguagePageId($table, $record, $pageId)])) {
+            return false;
+        }
+        return $this->getReadablePage($pageId) !== false;
+    }
+
+    /**
+     * One record of the given collection root with the published entries of the root and its children.
+     *
+     * @param CollectionRoot $root
+     * @param non-empty-list<PublishEntry> $entries newest first
      * @return array{
      *     id: int,
      *     table: string,
@@ -169,49 +277,149 @@ class PublishedHistoryService
      *     publishedAt: string,
      *     publishedBy: string,
      *     comment: string,
-     *     historyUrl: string
-     * }|null
+     *     historyUrl: string,
+     *     children: list<array{id: int, table: string, uid: int, title: string, type: string, action: string, historyUrl: string}>
+     * }
      */
-    protected function buildRecord(array $historyRow, array $payload, ?array $pageIdLookup = null): ?array
+    protected function buildRecord(array $root, array $entries): array
     {
-        $table = (string)$historyRow['tablename'];
-        $uid = (int)$historyRow['recuid'];
-        $tableConfiguration = $GLOBALS['TCA'][$table]['ctrl'] ?? null;
-        if (!is_array($tableConfiguration) || ($tableConfiguration['hideTable'] ?? false)) {
-            return null;
+        $table = $root['table'];
+        $uid = $root['uid'];
+        $pageId = $table === 'pages' ? $uid : (int)$root['record']['pid'];
+        // a root that was not published itself has only been changed through its children
+        $action = null;
+        $children = [];
+        foreach ($entries as $entry) {
+            if ($entry['table'] === $table && $entry['uid'] === $uid) {
+                $action = $action === null ? $entry['action'] : $this->mergeAction($action, $entry['action']);
+                continue;
+            }
+            $key = $entry['table'] . ':' . $entry['uid'];
+            if (isset($children[$key])) {
+                $children[$key]['action'] = $this->mergeAction($children[$key]['action'], $entry['action']);
+                continue;
+            }
+            $children[$key] = [
+                'id' => $entry['id'],
+                'table' => $entry['table'],
+                'uid' => $entry['uid'],
+                'title' => BackendUtility::getRecordTitle($entry['table'], $entry['record']),
+                'type' => $this->getTableTitle($entry['table']),
+                'action' => $entry['action'],
+                'historyUrl' => $this->getHistoryUrl($entry['table'], $entry['uid']),
+            ];
         }
-        $backendUser = $this->getBackendUser();
-        if (!$backendUser->check('tables_select', $table)) {
-            return null;
-        }
-        // deleted records are included: publishing a delete placeholder deletes the live record
-        $record = BackendUtility::getRecord($table, $uid, '*', '', false);
-        if ($record === null) {
-            return null;
-        }
-        $pageId = $table === 'pages' ? $uid : (int)$record['pid'];
-        if ($pageIdLookup !== null && !isset($pageIdLookup[$this->getDefaultLanguagePageId($table, $record, $pageId)])) {
-            return null;
-        }
-        $page = $this->getReadablePage($pageId);
-        if ($page === false) {
-            return null;
-        }
+        $comments = array_filter(array_column($entries, 'comment'));
 
         return [
-            'id' => (int)$historyRow['uid'],
+            'id' => $entries[0]['id'],
             'table' => $table,
             'uid' => $uid,
-            'title' => BackendUtility::getRecordTitle($table, $record),
-            'type' => $this->getLanguageService()->sL((string)($tableConfiguration['title'] ?? $table)) ?: $table,
-            'action' => $this->getAction($historyRow, $payload, $record),
+            'title' => BackendUtility::getRecordTitle($table, $root['record']),
+            'type' => $this->getTableTitle($table),
+            'action' => $action ?? 'modified',
             'pid' => $pageId,
-            'pageTitle' => (string)($page['title'] ?? ''),
-            'publishedAt' => date('c', (int)$historyRow['tstamp']),
-            'publishedBy' => $this->getUserName((int)$historyRow['userid']),
-            'comment' => (string)($payload['comment'] ?? ''),
-            'historyUrl' => (string)$this->backendUriBuilder->buildUriFromRoute('record_history', ['element' => $table . ':' . $uid]),
+            'pageTitle' => (string)(($this->getReadablePage($pageId) ?: [])['title'] ?? ''),
+            'publishedAt' => date('c', $entries[0]['tstamp']),
+            'publishedBy' => $this->getUserName($entries[0]['userId']),
+            'comment' => (string)(reset($comments) ?: ''),
+            'historyUrl' => $this->getHistoryUrl($table, $uid),
+            'children' => array_values($children),
         ];
+    }
+
+    /**
+     * Action of a record published more than once in a group, from the action of the newer and the older entry:
+     * a record that was deleted at last stays deleted, one that was created in the group is new.
+     */
+    protected function mergeAction(string $newerAction, string $olderAction): string
+    {
+        return $newerAction !== 'deleted' && $olderAction === 'new' ? 'new' : $newerAction;
+    }
+
+    /**
+     * The top-level record of the collection the given record belongs to, the record itself if it is no inline child.
+     * Like the workspace module, only inline relations with a foreign field are followed (type inline and file).
+     * Deleted parents are included, see buildEntry().
+     *
+     * @param array<string, mixed> $record
+     * @return CollectionRoot
+     */
+    protected function getCollectionRoot(string $table, array $record): array
+    {
+        $key = $table . ':' . (int)$record['uid'];
+        if (!isset($this->collectionRoots[$key])) {
+            $root = ['table' => $table, 'uid' => (int)$record['uid'], 'record' => $record];
+            for ($level = 0; $level < self::MAX_PARENT_LEVELS && ($parent = $this->getInlineParent($root['table'], $root['record'])) !== null; $level++) {
+                $root = $parent;
+            }
+            $this->collectionRoots[$key] = $root;
+        }
+        return $this->collectionRoots[$key];
+    }
+
+    /**
+     * @param array<string, mixed> $record
+     * @return CollectionRoot|null
+     */
+    protected function getInlineParent(string $table, array $record): ?array
+    {
+        foreach ($this->getInlineParentRelations()[$table] ?? [] as $relation) {
+            $parentUid = (int)($record[$relation['field']] ?? 0);
+            if ($parentUid <= 0 || ($relation['tableField'] !== '' && (string)($record[$relation['tableField']] ?? '') !== $relation['table'])) {
+                continue;
+            }
+            foreach ($relation['matchFields'] as $field => $value) {
+                if ((string)($record[$field] ?? '') !== (string)$value) {
+                    continue 2;
+                }
+            }
+            $parent = BackendUtility::getRecord($relation['table'], $parentUid, '*', '', false);
+            if ($parent !== null) {
+                return ['table' => $relation['table'], 'uid' => $parentUid, 'record' => $parent];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * @return array<string, list<array{table: string, field: string, tableField: string, matchFields: array<string, mixed>}>>
+     */
+    protected function getInlineParentRelations(): array
+    {
+        if ($this->inlineParentRelations === null) {
+            $this->inlineParentRelations = [];
+            foreach ($GLOBALS['TCA'] as $parentTable => $tableConfiguration) {
+                foreach ($tableConfiguration['columns'] ?? [] as $column) {
+                    $config = $column['config'] ?? [];
+                    // type file is prepared to an inline relation to sys_file_reference (TcaPreparation)
+                    if (!in_array($config['type'] ?? '', ['inline', 'file'], true)
+                        || ($config['foreign_table'] ?? '') === ''
+                        || ($config['foreign_field'] ?? '') === ''
+                        || ($config['MM'] ?? '') !== ''
+                    ) {
+                        continue;
+                    }
+                    $this->inlineParentRelations[$config['foreign_table']][] = [
+                        'table' => (string)$parentTable,
+                        'field' => $config['foreign_field'],
+                        'tableField' => (string)($config['foreign_table_field'] ?? ''),
+                        'matchFields' => (array)($config['foreign_match_fields'] ?? []),
+                    ];
+                }
+            }
+        }
+        return $this->inlineParentRelations;
+    }
+
+    protected function getTableTitle(string $table): string
+    {
+        return $this->getLanguageService()->sL((string)($GLOBALS['TCA'][$table]['ctrl']['title'] ?? $table)) ?: $table;
+    }
+
+    protected function getHistoryUrl(string $table, int $uid): string
+    {
+        return (string)$this->backendUriBuilder->buildUriFromRoute('record_history', ['element' => $table . ':' . $uid]);
     }
 
     /**

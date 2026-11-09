@@ -2381,9 +2381,61 @@ typo3-kanban-assign-modal,typo3-kanban-board,typo3-kanban-card,typo3-kanban-colu
   border-left:3px solid var(--success);
   display:block;
 }
-.kanban-card-published,.kanban-card-published:focus,.kanban-card-published:hover{
+.kanban-card-published:focus-within{
+  border-color:var(--border-color);
+  box-shadow:var(--shadow-lg);
+}
+.kanban-card-published a,.kanban-card-published a:focus,.kanban-card-published a:hover{
   color:inherit;
   text-decoration:none;
+}
+.kanban-card-published .published-link{
+  outline:none;
+}
+.kanban-card-published .published-link:after{
+  content:"";
+  inset:0;
+  position:absolute;
+  z-index:1;
+}
+
+.published-children{
+  display:flex;
+  flex-direction:column;
+  font-size:12px;
+  gap:2px;
+  list-style:none;
+  margin:0 0 var(--spacing-sm);
+  padding:0;
+  position:relative;
+  z-index:2;
+}
+.published-children a{
+  align-items:baseline;
+  border-radius:var(--border-radius);
+  display:flex;
+  gap:var(--spacing-xs);
+  padding:2px var(--spacing-xs);
+}
+.published-children a:focus,.published-children a:hover{
+  background-color:var(--bg-secondary);
+}
+.published-children .published-action{
+  flex:none;
+  font-size:10px;
+  padding:1px 6px;
+}
+
+.published-child-type{
+  color:var(--text-muted);
+  flex:none;
+}
+
+.published-child-title{
+  color:var(--text-primary);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
 }
 
 .published-action{

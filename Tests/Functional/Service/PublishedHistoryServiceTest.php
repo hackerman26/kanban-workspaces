@@ -40,8 +40,11 @@ final class PublishedHistoryServiceTest extends FunctionalTestCase
         $dataHandler = $this->runDataHandler(['tt_content' => ['NEW1' => ['pid' => 1, 'CType' => 'text', 'header' => 'New element']]]);
         $newUid = (int)$dataHandler->substNEWwithIDs['NEW1'];
         $this->publish('tt_content', $newUid);
+        // publishes of the same record a few seconds apart are merged
+        $GLOBALS['EXEC_TIME'] += 60;
         $this->runDataHandler(['tt_content' => [10 => ['header' => 'Changed element']]]);
         $this->publish('tt_content', 10);
+        $GLOBALS['EXEC_TIME'] += 60;
         $this->runDataHandler([], ['tt_content' => [$newUid => ['delete' => 1]]]);
         $this->publish('tt_content', $newUid);
 
@@ -88,11 +91,78 @@ final class PublishedHistoryServiceTest extends FunctionalTestCase
     }
 
     #[Test]
-    public function recordsOfHiddenTablesAreNotListed(): void
+    public function recordsOfHiddenTablesAreNotListedWithoutParent(): void
+    {
+        // the content element of file reference 2 does not exist
+        $this->addPublishEntry('sys_file_reference', 2);
+
+        self::assertSame([], $this->findPublishedRecords());
+    }
+
+    #[Test]
+    public function inlineChildrenPublishedWithTheirParentAreListedAsItsChildren(): void
+    {
+        // DataHandler versions and publishes the image reference of the content element along with it
+        $this->runDataHandler(['tt_content' => [10 => ['header' => 'Changed element']]]);
+        $this->publish('tt_content', 10);
+
+        $records = $this->findPublishedRecords();
+
+        self::assertCount(1, $records);
+        self::assertSame(['tt_content', 10, 'modified', 'Changed element'], [$records[0]['table'], $records[0]['uid'], $records[0]['action'], $records[0]['title']]);
+        self::assertSame(
+            [['sys_file_reference', 1, 'modified', 'image.jpg', 'File Reference']],
+            array_map(static fn (array $child): array => [$child['table'], $child['uid'], $child['action'], $child['title'], $child['type']], $records[0]['children'])
+        );
+        self::assertStringContainsString('element=sys_file_reference:1', $records[0]['children'][0]['historyUrl']);
+    }
+
+    #[Test]
+    public function aParentPublishedOnlyThroughItsChildrenIsListedAsModified(): void
     {
         $this->addPublishEntry('sys_file_reference', 1);
 
-        self::assertSame([], $this->findPublishedRecords());
+        $records = $this->findPublishedRecords();
+
+        self::assertSame([['tt_content', 10, 'modified']], array_map(static fn (array $record): array => [$record['table'], $record['uid'], $record['action']], $records));
+        self::assertSame([1], array_column($records[0]['children'], 'uid'));
+        self::assertStringContainsString('element=tt_content:10', $records[0]['historyUrl']);
+    }
+
+    #[Test]
+    public function aRecordCreatedAndChangedInOnePublishIsListedOnceAsNew(): void
+    {
+        $dataHandler = $this->runDataHandler(['tt_content' => ['NEW1' => ['pid' => 1, 'CType' => 'text', 'header' => 'New element']]]);
+        $newUid = (int)$dataHandler->substNEWwithIDs['NEW1'];
+        $this->publish('tt_content', $newUid);
+        $this->runDataHandler(['tt_content' => [$newUid => ['header' => 'Changed new element']]]);
+        $this->publish('tt_content', $newUid);
+
+        $records = $this->findPublishedRecords();
+
+        self::assertSame([[$newUid, 'new']], array_map(static fn (array $record): array => [$record['uid'], $record['action']], $records));
+    }
+
+    #[Test]
+    public function inlineChildrenAreOnlyGroupedWhenPublishedTogether(): void
+    {
+        $now = (int)$GLOBALS['EXEC_TIME'];
+        $this->addPublishEntry('sys_file_reference', 1, $now);
+        $this->addPublishEntry('sys_file_reference', 1, $now - PublishedHistoryService::GROUP_SECONDS);
+        $this->addPublishEntry('sys_file_reference', 1, $now - 2 * PublishedHistoryService::GROUP_SECONDS - 1);
+        $this->addPublishEntry('sys_file_reference', 1, $now, 2);
+
+        $records = $this->findPublishedRecords();
+
+        // entries of different users are grouped as well, the newest entry is the publish of the group
+        self::assertSame(
+            [
+                ['editor', date('c', $now)],
+                ['Admin User', date('c', $now - 2 * PublishedHistoryService::GROUP_SECONDS - 1)],
+            ],
+            array_map(static fn (array $record): array => [$record['publishedBy'], $record['publishedAt']], $records)
+        );
+        self::assertSame([1, 1], array_map(static fn (array $record): int => count($record['children']), $records));
     }
 
     #[Test]
@@ -170,15 +240,15 @@ final class PublishedHistoryServiceTest extends FunctionalTestCase
         ]);
     }
 
-    private function addPublishEntry(string $table, int $uid): void
+    private function addPublishEntry(string $table, int $uid, ?int $tstamp = null, int $userId = 1): void
     {
         $this->getConnectionPool()->getConnectionForTable('sys_history')->insert('sys_history', [
             'actiontype' => RecordHistoryStore::ACTION_PUBLISH,
             'usertype' => 'BE',
-            'userid' => 1,
+            'userid' => $userId,
             'tablename' => $table,
             'recuid' => $uid,
-            'tstamp' => time(),
+            'tstamp' => $tstamp ?? (int)$GLOBALS['EXEC_TIME'],
             'history_data' => json_encode(['workspaceId' => self::WORKSPACE_UID, 'comment' => '', 'recipients' => []]),
             'workspace' => 0,
             'correlation_id' => '',

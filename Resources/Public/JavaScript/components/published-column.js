@@ -39,7 +39,9 @@ function label(key, ...args) {
  * Read-only "Live" column listing the records published from the current
  * workspace (sys_history publish entries). It is no drop target and its cards
  * are not draggable: published records can only be looked at. A card links to
- * the record history, which shows the published changes.
+ * the record history, which shows the published changes. The inline children
+ * published with the record (e.g. the content elements of a news record) are
+ * listed on its card, each with a link to its own history.
  *
  * The number of days in the column description is an input; changing it
  * dispatches a `published-days-change` event the board reloads the list on.
@@ -73,19 +75,40 @@ let KanbanPublishedColumnElement = class KanbanPublishedColumnElement extends Li
     historyUrl(record) {
         return `${record.historyUrl}&returnUrl=${encodeURIComponent(window.location.href)}`;
     }
+    renderAction(record) {
+        return html `<span class="published-action published-action-${record.action}">${label(`publishedHistory.action.${record.action}`)}</span>`;
+    }
+    // The children are links of their own, so they are placed above the card link (see styles.scss).
+    renderChildren(children) {
+        if (!children?.length) {
+            return nothing;
+        }
+        return html `
+      <ul class="published-children">
+        ${children.map((child) => html `
+          <li>
+            <a href=${this.historyUrl(child)} data-history-id=${child.id} title=${label('publishedHistory.showChanges')}>
+              ${this.renderAction(child)}
+              <span class="published-child-type">${child.type}</span>
+              <span class="published-child-title">${child.title}</span>
+            </a>
+          </li>`)}
+      </ul>`;
+    }
     renderRecord(record) {
         return html `
-      <a class="kanban-card kanban-card-published" href=${this.historyUrl(record)}
-        data-history-id=${record.id} title=${label('publishedHistory.showChanges')}>
+      <div class="kanban-card kanban-card-published" data-history-id=${record.id}>
         <div class="card-header">
           <div class="card-type">
             <i class="fas fa-history"></i>
             <span>${record.type}</span>
           </div>
-          <span class="published-action published-action-${record.action}">${label(`publishedHistory.action.${record.action}`)}</span>
+          ${this.renderAction(record)}
         </div>
 
-        <h4 class="card-title">${record.title}</h4>
+        <h4 class="card-title">
+          <a class="published-link" href=${this.historyUrl(record)} title=${label('publishedHistory.showChanges')}>${record.title}</a>
+        </h4>
 
         <div class="card-meta">
           <div class="card-meta-row">
@@ -97,9 +120,11 @@ let KanbanPublishedColumnElement = class KanbanPublishedColumnElement extends Li
           </div>
         </div>
 
+        ${this.renderChildren(record.children)}
+
         ${record.comment ? html `
           <div class="published-comment"><i class="fas fa-comment"></i><span>${record.comment}</span></div>` : nothing}
-      </a>`;
+      </div>`;
     }
     render() {
         return html `
