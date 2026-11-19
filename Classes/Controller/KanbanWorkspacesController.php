@@ -23,6 +23,7 @@ use TYPO3\CMS\Workspaces\Domain\Repository\WorkspaceStageRepository;
 use TYPO3\CMS\Workspaces\Service\StagesService;
 use TYPO3\CMS\Workspaces\Service\WorkspaceService;
 use WebVision\KanbanWorkspaces\Configuration\EmConfiguration;
+use WebVision\KanbanWorkspaces\Service\ReadyToPublishStageFilter;
 
 /**
  * Backend module controller for Kanban Workspaces - TYPO3 v13 compatible
@@ -44,6 +45,7 @@ class KanbanWorkspacesController extends ActionController
         protected readonly TranslationConfigurationProvider $translationConfigurationProvider,
         protected readonly ConnectionPool $connectionPool,
         protected readonly UriBuilder $backendUriBuilder,
+        protected readonly ReadyToPublishStageFilter $readyToPublishStageFilter,
     ) {
     }
 
@@ -65,7 +67,11 @@ class KanbanWorkspacesController extends ActionController
 
         if ($workspaceIsAccessible) {
             $workspaceRecord = $this->workspaceRepository->findByUid($activeWorkspace);
-            $stages = $this->workspaceStageRepository->findAllStagesByWorkspace($backendUser, $workspaceRecord);
+            // Filtered here as well: on TYPO3 v14 the core repository cannot be replaced
+            $stages = $this->readyToPublishStageFilter->filter(
+                $this->workspaceStageRepository->findAllStagesByWorkspace($backendUser, $workspaceRecord),
+                $workspaceRecord
+            );
         }
 
         $this->moduleTemplate = $this->moduleTemplateFactory->create($this->request);
