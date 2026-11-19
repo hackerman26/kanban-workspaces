@@ -190,14 +190,24 @@ dependencies keep being autowired through the inherited constructor. The
 Hidden "Ready to publish" stage (WorkspaceStageRepository override)
 ===================================================================
 
-``WebVision\KanbanWorkspaces\Domain\Repository\WorkspaceStageRepository``
-extends the core ``TYPO3\CMS\Workspaces\Domain\Repository\WorkspaceStageRepository``
-and replaces it through ``#[AsAlias]``, like the ``StagesService`` above. When
-``hideReadyToPublishStage`` is enabled, ``findAllStagesByWorkspace()`` drops the
-``STAGE_PUBLISH_ID`` (-10) stage, so ``StagesService::getNextStage()`` and
-``getPreviousStage()`` step directly between the edit and the execute stage.
-Workspaces with ``PUBLISH_ACCESS_ONLY_IN_PUBLISH_STAGE`` keep the stage, because
-the core workflow requires it there.
+``WebVision\KanbanWorkspaces\Service\ReadyToPublishStageFilter`` drops the
+``STAGE_PUBLISH_ID`` (-10) stage from a stage list when ``hideReadyToPublishStage``
+is enabled. Workspaces with ``PUBLISH_ACCESS_ONLY_IN_PUBLISH_STAGE`` keep the
+stage, because the core workflow requires it there. The kanban board controller
+always applies the filter.
+
+On TYPO3 v13, ``WebVision\KanbanWorkspaces\Domain\Repository\WorkspaceStageRepository``
+additionally extends the core ``TYPO3\CMS\Workspaces\Domain\Repository\WorkspaceStageRepository``,
+applies the filter in ``findAllStagesByWorkspace()`` and replaces the core
+repository through an alias in ``Configuration/Services.php``. So the core
+Workspaces module and the preview toolbar use the reduced workflow too, and
+``StagesService::getNextStage()`` and ``getPreviousStage()`` step directly
+between the edit and the execute stage.
+
+TYPO3 v14 declares the core repository ``final``. ``Configuration/Services.php``
+checks that and then neither registers nor loads the subclass (it is excluded
+from the resource scan in ``Services.yaml``), so only the kanban board hides the
+stage there.
 
 The upgrade wizard ``WebVision\KanbanWorkspaces\Upgrades\ReadyToPublishStageUpgradeWizard``
 (``kanbanWorkspaces_readyToPublishStage``) moves workspace versions from stage -10

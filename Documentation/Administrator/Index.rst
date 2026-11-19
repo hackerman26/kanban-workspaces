@@ -86,9 +86,11 @@ You can configure the extension under **Admin Tools** > **Settings** >
   update, so the record keeps its current workflow stage.
 * **Hide "Ready to publish" stage** (``hideReadyToPublishStage``) - By default
   disabled. When enabled, the default "Ready to publish" stage (stage ``-10``)
-  is removed from the workflow of the kanban board, the core Workspaces module
-  and the preview toolbar, so records move directly from "Editing" to "Publish".
-  Workspaces with "Publish only content in publish stage" keep the stage. After
+  is removed from the workflow of the kanban board, so records move directly
+  from "Editing" to "Publish". On TYPO3 v13 the core Workspaces module and the
+  preview toolbar use the reduced workflow as well; on TYPO3 v14 they keep
+  showing the stage. Workspaces with "Publish only content in publish stage"
+  keep the stage. After
   enabling it on an existing installation, run the upgrade wizard
   ``kanbanWorkspaces_readyToPublishStage`` to move records still in that stage
   back to "Editing".

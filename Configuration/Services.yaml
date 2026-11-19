@@ -6,5 +6,8 @@ services:
 
   WebVision\KanbanWorkspaces\:
     resource: '../Classes/*'
-    exclude: '../Classes/Domain/Model/*'
+    exclude:
+      - '../Classes/Domain/Model/*'
+      # Registered in Services.php, only where the core class is not final (TYPO3 v13)
+      - '../Classes/Domain/Repository/WorkspaceStageRepository.php'
 

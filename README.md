@@ -84,8 +84,10 @@ Configure in **Admin Tools → Extension Manager → kanban_workspaces** (or `ex
 
 Custom stage titles are applied by extending TYPO3's `StagesService::getStageTitle()`; an empty value falls back to the core title.
 
-The "Ready to publish" stage is hidden by extending TYPO3's `WorkspaceStageRepository`, so the kanban board, the core
-Workspaces module and the preview toolbar all use the reduced workflow. When enabling the option on an existing
+The "Ready to publish" stage is always hidden on the kanban board. On TYPO3 v13 it is hidden by extending TYPO3's
+`WorkspaceStageRepository`, so the core Workspaces module and the preview toolbar use the reduced workflow as well.
+TYPO3 v14 declares that repository final, so there the core Workspaces module and the preview toolbar keep showing
+the stage. When enabling the option on an existing
 installation, run the upgrade wizard **"Kanban Workspaces: Move workspace records out of the "Ready to publish" stage"**
 to move records still in that stage back to "Editing".
 

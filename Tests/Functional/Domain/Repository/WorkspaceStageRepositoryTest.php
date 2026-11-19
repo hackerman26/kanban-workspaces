@@ -19,6 +19,7 @@ use TYPO3\CMS\Workspaces\Domain\Repository\WorkspaceStageRepository as CoreWorks
 use TYPO3\CMS\Workspaces\Service\StagesService;
 use TYPO3\TestingFramework\Core\Functional\FunctionalTestCase;
 use WebVision\KanbanWorkspaces\Domain\Repository\WorkspaceStageRepository;
+use WebVision\KanbanWorkspaces\Service\ReadyToPublishStageFilter;
 
 final class WorkspaceStageRepositoryTest extends FunctionalTestCase
 {
@@ -49,7 +50,35 @@ final class WorkspaceStageRepositoryTest extends FunctionalTestCase
     #[Test]
     public function coreWorkspaceStageRepositoryIsReplacedByExtendedRepository(): void
     {
+        $this->skipIfCoreRepositoryIsFinal();
+
         self::assertInstanceOf(WorkspaceStageRepository::class, $this->get(CoreWorkspaceStageRepository::class));
+    }
+
+    #[Test]
+    public function coreWorkspaceStageRepositoryIsKeptWhereItIsFinal(): void
+    {
+        if (!$this->isCoreRepositoryFinal()) {
+            self::markTestSkipped('The core WorkspaceStageRepository is replaceable in this TYPO3 version.');
+        }
+
+        self::assertSame(CoreWorkspaceStageRepository::class, $this->get(CoreWorkspaceStageRepository::class)::class);
+    }
+
+    #[Test]
+    public function replacedRepositoryHidesReadyToPublishStageWhenConfigured(): void
+    {
+        $this->skipIfCoreRepositoryIsFinal();
+        $GLOBALS['TYPO3_CONF_VARS']['EXTENSIONS']['kanban_workspaces'] = ['hideReadyToPublishStage' => '1'];
+
+        $backendUser = $this->setUpBackendUser(1);
+        $workspace = $this->get(WorkspaceRepository::class)->findByUid(self::TWO_STAGE_WORKSPACE_UID);
+        $stages = $this->get(CoreWorkspaceStageRepository::class)->findAllStagesByWorkspace($backendUser, $workspace);
+
+        self::assertSame(
+            [StagesService::STAGE_EDIT_ID, StagesService::STAGE_PUBLISH_EXECUTE_ID],
+            array_map(static fn (WorkspaceStage $stage): int => $stage->uid, $stages)
+        );
     }
 
     #[Test]
@@ -84,14 +113,32 @@ final class WorkspaceStageRepositoryTest extends FunctionalTestCase
     }
 
     /**
+     * The stages as the kanban board sees them: from the core repository, run
+     * through the filter (applied on every TYPO3 version).
+     *
      * @return list<int>
      */
     private function findStageUids(int $workspaceUid): array
     {
         $backendUser = $this->setUpBackendUser(1);
         $workspace = $this->get(WorkspaceRepository::class)->findByUid($workspaceUid);
-        $stages = $this->get(CoreWorkspaceStageRepository::class)->findAllStagesByWorkspace($backendUser, $workspace);
+        $stages = $this->get(ReadyToPublishStageFilter::class)->filter(
+            $this->get(CoreWorkspaceStageRepository::class)->findAllStagesByWorkspace($backendUser, $workspace),
+            $workspace
+        );
 
         return array_map(static fn (WorkspaceStage $stage): int => $stage->uid, $stages);
+    }
+
+    private function isCoreRepositoryFinal(): bool
+    {
+        return (new \ReflectionClass(CoreWorkspaceStageRepository::class))->isFinal();
+    }
+
+    private function skipIfCoreRepositoryIsFinal(): void
+    {
+        if ($this->isCoreRepositoryFinal()) {
+            self::markTestSkipped('The core WorkspaceStageRepository is final in this TYPO3 version.');
+        }
     }
 }
