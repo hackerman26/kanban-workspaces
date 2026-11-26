@@ -76,6 +76,8 @@ let KanbanBoardElement = class KanbanBoardElement extends LitElement {
         this.skipSendToStageDialog = false;
         this.draggedCard = null;
         this.mockData = false;
+        this.pageIsSiteRoot = false;
+        this.pageLevels = {};
         this.boundKeyDown = (e) => this.onKeyDown(e);
         this.boundKeyUp = (e) => this.onKeyUp(e);
         this.boundContextClose = (e) => {
@@ -155,6 +157,8 @@ let KanbanBoardElement = class KanbanBoardElement extends LitElement {
             stage: config.selectedStage ? [String(config.selectedStage)] : [],
         };
         this.mockData = !!config.mockData;
+        this.pageIsSiteRoot = !!config.pageIsSiteRoot;
+        this.pageLevels = config.pageLevels && !Array.isArray(config.pageLevels) ? config.pageLevels : {};
     }
     wireHeaderControls() {
         this.headerSearch = document.getElementById('globalSearch');
@@ -189,7 +193,7 @@ let KanbanBoardElement = class KanbanBoardElement extends LitElement {
         showLoading();
         this.api.fetchData(this.apiPayload)
             .then((data) => {
-            this.cards = data.cards || [];
+            this.cards = this.withoutRootLevelCards(data.cards || []);
             this.pruneSelection();
         })
             .catch((error) => { console.error('Failed to load data:', error); showToast('Error loading data', 'error'); this.cards = []; })
@@ -239,6 +243,21 @@ let KanbanBoardElement = class KanbanBoardElement extends LitElement {
         }
         return this.publishedRecords.filter((record) => [record.title, record.pageTitle, record.type, String(record.uid)]
             .some((value) => value.toLowerCase().includes(query)));
+    }
+    // Records on the root level (pid 0, e.g. sys_file_metadata) belong to no
+    // page, yet the workspace API adds them to every page selection. Show them
+    // on a site root page and on the selected pages that use them (file
+    // metadata: pages referencing the file), so a page shows only its own changes.
+    withoutRootLevelCards(cards) {
+        if (this.pageIsSiteRoot) {
+            return cards;
+        }
+        const depth = parseInt(this.activeFilters.depth?.[0] ?? '0', 10) || 0;
+        const isOnSelectedPages = (card) => (card.usedOnPages || []).some((pageUid) => {
+            const level = this.pageLevels[String(pageUid)];
+            return level !== undefined && level <= depth;
+        });
+        return cards.filter((card) => card.table === 'pages' || (card.pid ?? 0) > 0 || isOnSelectedPages(card));
     }
     cardsForStage(stage) {
         let list = this.cards.filter((card) => card.stage === stage.id);

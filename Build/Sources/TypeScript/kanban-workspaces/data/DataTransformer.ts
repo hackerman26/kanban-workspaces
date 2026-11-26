@@ -83,6 +83,7 @@ export class DataTransformer {
         t3ver_wsid: item.t3ver_wsid || null,
         table: item.table,
         pid: item.livepid || null,
+        usedOnPages: Array.isArray(item.usedOnPages) ? item.usedOnPages.map(Number) : [],
         nextStage: item.value_nextStage,
         prevStage: item.value_prevStage,
         // TYPO3 groups a record with its dependent records (inline children) into a collection

@@ -44,6 +44,8 @@ export interface Card {
   t3ver_wsid?: number | null;
   table?: string;
   pid?: number | null;
+  /** Pages using a root level record (file metadata: pages referencing the file). */
+  usedOnPages?: number[];
   nextStage?: unknown;
   prevStage?: unknown;
   /** Collection of the record (Workspaces_CollectionCurrent), empty if it has no dependent records. */

@@ -11,6 +11,7 @@ use TYPO3\CMS\Backend\Routing\UriBuilder;
 use TYPO3\CMS\Backend\Template\ModuleTemplate;
 use TYPO3\CMS\Backend\Template\ModuleTemplateFactory;
 use TYPO3\CMS\Backend\Tree\View\PageTreeView;
+use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
@@ -166,8 +167,11 @@ class KanbanWorkspacesController extends ActionController
 
         // Add CSS and JS
         $this->addAssets();
+        $pageIsSiteRoot = $this->isSiteRootPage($pageUid);
         $this->configureKanban([
             'pageUid' => $pageUid,
+            'pageIsSiteRoot' => $pageIsSiteRoot,
+            'pageLevels' => $pageIsSiteRoot ? [] : $this->getPageLevels($pageUid, $activeWorkspace),
             'workspaceId' => $activeWorkspace,
             'stages' => $stageConfig,
             'showLanguages' => $showLanguages,
@@ -192,6 +196,60 @@ class KanbanWorkspacesController extends ActionController
 
         // Load workspaces send-to-stage-form Web Component
         $this->pageRenderer->loadJavaScriptModule('@typo3/workspaces/renderable/send-to-stage-form.js');
+    }
+
+    /**
+     * Whether the page is the root page of a site. The board shows records
+     * stored on the root level (pid 0) only on such a page.
+     */
+    protected function isSiteRootPage(int $pageUid): bool
+    {
+        if ($pageUid <= 0) {
+            return false;
+        }
+        $page = BackendUtility::getRecord('pages', $pageUid, 'pid,is_siteroot');
+        return is_array($page) && ((int)$page['pid'] === 0 || (bool)$page['is_siteroot']);
+    }
+
+    /**
+     * Returns the page and its subpages (live or in the workspace) with their
+     * level below the page (the page itself is level 0), so the board can match
+     * records used on a page against the selected depth.
+     *
+     * @return array<int, int> level by page uid
+     */
+    protected function getPageLevels(int $pageUid, int $workspaceId): array
+    {
+        if ($pageUid <= 0) {
+            return [];
+        }
+        $levels = [$pageUid => 0];
+        $parentUids = [$pageUid];
+        for ($level = 1; $parentUids !== []; $level++) {
+            $queryBuilder = $this->connectionPool->getQueryBuilderForTable('pages');
+            $queryBuilder->getRestrictions()->removeAll();
+            $childUids = $queryBuilder
+                ->select('uid', 't3ver_oid')
+                ->from('pages')
+                ->where(
+                    $queryBuilder->expr()->in('pid', $queryBuilder->createNamedParameter($parentUids, Connection::PARAM_INT_ARRAY)),
+                    $queryBuilder->expr()->eq('deleted', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT)),
+                    $queryBuilder->expr()->eq('sys_language_uid', $queryBuilder->createNamedParameter(0, Connection::PARAM_INT)),
+                    $queryBuilder->expr()->in('t3ver_wsid', $queryBuilder->createNamedParameter([0, $workspaceId], Connection::PARAM_INT_ARRAY))
+                )
+                ->executeQuery()
+                ->fetchAllAssociative();
+            $parentUids = [];
+            foreach ($childUids as $row) {
+                // A workspace version stands for its live page.
+                $uid = (int)$row['t3ver_oid'] > 0 ? (int)$row['t3ver_oid'] : (int)$row['uid'];
+                if (!isset($levels[$uid])) {
+                    $levels[$uid] = $level;
+                    $parentUids[] = $uid;
+                }
+            }
+        }
+        return $levels;
     }
 
     /**
