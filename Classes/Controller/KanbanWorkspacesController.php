@@ -11,6 +11,7 @@ use TYPO3\CMS\Backend\Routing\UriBuilder;
 use TYPO3\CMS\Backend\Template\ModuleTemplate;
 use TYPO3\CMS\Backend\Template\ModuleTemplateFactory;
 use TYPO3\CMS\Backend\Tree\View\PageTreeView;
+use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
@@ -139,6 +140,7 @@ class KanbanWorkspacesController extends ActionController
         $this->addAssets();
         $this->configureKanban([
             'pageUid' => $pageUid,
+            'pageIsSiteRoot' => $this->isSiteRootPage($pageUid),
             'workspaceId' => $activeWorkspace,
             'stages' => $stageConfig,
             'selectedLanguage' => $selectedLanguage,
@@ -174,6 +176,19 @@ class KanbanWorkspacesController extends ActionController
 
         // Load workspaces send-to-stage-form Web Component
         $this->pageRenderer->loadJavaScriptModule('@typo3/workspaces/renderable/send-to-stage-form.js');
+    }
+
+    /**
+     * Whether the page is the root page of a site. The board shows records
+     * stored on the root level (pid 0) only on such a page.
+     */
+    protected function isSiteRootPage(int $pageUid): bool
+    {
+        if ($pageUid <= 0) {
+            return false;
+        }
+        $page = BackendUtility::getRecord('pages', $pageUid, 'pid,is_siteroot');
+        return is_array($page) && ((int)$page['pid'] === 0 || (bool)$page['is_siteroot']);
     }
 
     /**

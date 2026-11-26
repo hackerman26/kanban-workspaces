@@ -65,6 +65,7 @@ export class KanbanBoardElement extends LitElement {
   private api!: WorkspaceApi;
   private apiPayload: any;
   private mockData = false;
+  private pageIsSiteRoot = false;
 
   private readonly boundKeyDown = (e: KeyboardEvent) => this.onKeyDown(e);
   private readonly boundKeyUp = (e: KeyboardEvent) => this.onKeyUp(e);
@@ -152,6 +153,7 @@ export class KanbanBoardElement extends LitElement {
       stage: config.selectedStage ? [String(config.selectedStage)] : [],
     };
     this.mockData = !!config.mockData;
+    this.pageIsSiteRoot = !!config.pageIsSiteRoot;
   }
 
   private wireHeaderControls(): void {
@@ -187,9 +189,19 @@ export class KanbanBoardElement extends LitElement {
 
     showLoading();
     this.api.fetchData(this.apiPayload)
-      .then((data) => { this.cards = data.cards || []; })
+      .then((data) => { this.cards = this.withoutRootLevelCards(data.cards || []); })
       .catch((error) => { console.error('Failed to load data:', error); showToast('Error loading data', 'error'); this.cards = []; })
       .finally(() => hideLoading());
+  }
+
+  // Records on the root level (pid 0, e.g. sys_file_metadata) belong to no
+  // page, yet the workspace API adds them to every page selection. Show them
+  // only on a site root page, so a page shows only its own changes.
+  private withoutRootLevelCards(cards: Card[]): Card[] {
+    if (this.pageIsSiteRoot) {
+      return cards;
+    }
+    return cards.filter((card) => card.table === 'pages' || (card.pid ?? 0) > 0);
   }
 
   private cardsForStage(stage: Stage): Card[] {
