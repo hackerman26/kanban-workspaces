@@ -69,6 +69,7 @@ let KanbanBoardElement = class KanbanBoardElement extends LitElement {
         this.draggedCard = null;
         this.mockData = false;
         this.pageIsSiteRoot = false;
+        this.pageLevels = {};
         this.boundKeyDown = (e) => this.onKeyDown(e);
         this.boundKeyUp = (e) => this.onKeyUp(e);
         this.boundContextClose = (e) => {
@@ -148,6 +149,7 @@ let KanbanBoardElement = class KanbanBoardElement extends LitElement {
         };
         this.mockData = !!config.mockData;
         this.pageIsSiteRoot = !!config.pageIsSiteRoot;
+        this.pageLevels = config.pageLevels && !Array.isArray(config.pageLevels) ? config.pageLevels : {};
     }
     wireHeaderControls() {
         this.headerSearch = document.getElementById('globalSearch');
@@ -187,12 +189,18 @@ let KanbanBoardElement = class KanbanBoardElement extends LitElement {
     }
     // Records on the root level (pid 0, e.g. sys_file_metadata) belong to no
     // page, yet the workspace API adds them to every page selection. Show them
-    // only on a site root page, so a page shows only its own changes.
+    // on a site root page and on the selected pages that use them (file
+    // metadata: pages referencing the file), so a page shows only its own changes.
     withoutRootLevelCards(cards) {
         if (this.pageIsSiteRoot) {
             return cards;
         }
-        return cards.filter((card) => card.table === 'pages' || (card.pid ?? 0) > 0);
+        const depth = parseInt(this.activeFilters.depth?.[0] ?? '0', 10) || 0;
+        const isOnSelectedPages = (card) => (card.usedOnPages || []).some((pageUid) => {
+            const level = this.pageLevels[String(pageUid)];
+            return level !== undefined && level <= depth;
+        });
+        return cards.filter((card) => card.table === 'pages' || (card.pid ?? 0) > 0 || isOnSelectedPages(card));
     }
     cardsForStage(stage) {
         let list = this.cards.filter((card) => card.stage === stage.id);

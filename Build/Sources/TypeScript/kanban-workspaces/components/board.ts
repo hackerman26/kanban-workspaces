@@ -66,6 +66,7 @@ export class KanbanBoardElement extends LitElement {
   private apiPayload: any;
   private mockData = false;
   private pageIsSiteRoot = false;
+  private pageLevels: Record<string, number> = {};
 
   private readonly boundKeyDown = (e: KeyboardEvent) => this.onKeyDown(e);
   private readonly boundKeyUp = (e: KeyboardEvent) => this.onKeyUp(e);
@@ -154,6 +155,7 @@ export class KanbanBoardElement extends LitElement {
     };
     this.mockData = !!config.mockData;
     this.pageIsSiteRoot = !!config.pageIsSiteRoot;
+    this.pageLevels = config.pageLevels && !Array.isArray(config.pageLevels) ? config.pageLevels : {};
   }
 
   private wireHeaderControls(): void {
@@ -196,12 +198,18 @@ export class KanbanBoardElement extends LitElement {
 
   // Records on the root level (pid 0, e.g. sys_file_metadata) belong to no
   // page, yet the workspace API adds them to every page selection. Show them
-  // only on a site root page, so a page shows only its own changes.
+  // on a site root page and on the selected pages that use them (file
+  // metadata: pages referencing the file), so a page shows only its own changes.
   private withoutRootLevelCards(cards: Card[]): Card[] {
     if (this.pageIsSiteRoot) {
       return cards;
     }
-    return cards.filter((card) => card.table === 'pages' || (card.pid ?? 0) > 0);
+    const depth = parseInt(this.activeFilters.depth?.[0] ?? '0', 10) || 0;
+    const isOnSelectedPages = (card: Card): boolean => (card.usedOnPages || []).some((pageUid) => {
+      const level = this.pageLevels[String(pageUid)];
+      return level !== undefined && level <= depth;
+    });
+    return cards.filter((card) => card.table === 'pages' || (card.pid ?? 0) > 0 || isOnSelectedPages(card));
   }
 
   private cardsForStage(stage: Stage): Card[] {
